@@ -1,6 +1,6 @@
 # Encryptor Decryptor v1.0
 
-[![Simple Encryptor Decryptor Production](https://github.com/g4-api/simple-encryptor-decryptor/actions/workflows/dotnet-desktop.yml/badge.svg)](https://github.com/g4-api/simple-encryptor-decryptor/actions/workflows/dotnet-desktop.yml)  
+[![Build & Release](https://github.com/g4-api/simple-encryptor-decryptor/actions/workflows/GitHubActions.yml/badge.svg)](https://github.com/g4-api/simple-encryptor-decryptor/actions/workflows/GitHubActions.yml)  
 
 ## Overview
 
