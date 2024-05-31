@@ -1,5 +1,7 @@
 # Encryptor Decryptor v1.0
 
+[![Simple Encryptor Decryptor Production](https://github.com/g4-api/simple-encryptor-decryptor/actions/workflows/dotnet-desktop.yml/badge.svg)](https://github.com/g4-api/simple-encryptor-decryptor/actions/workflows/dotnet-desktop.yml)  
+
 ## Overview
 
 Encryptor Decryptor v1.0 is a lightweight and standalone Windows application built using .NET 8. It provides a straightforward solution for encrypting and decrypting text using a user-provided key. This single-file application ensures a hassle-free experience without the need for additional installations.
