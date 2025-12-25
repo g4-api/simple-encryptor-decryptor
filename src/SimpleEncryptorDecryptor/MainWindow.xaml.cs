@@ -1,17 +1,15 @@
-﻿using System.IO;
+﻿using System;
+using System.Data.SqlTypes;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
-using System;
 using System.Text;
 using System.Windows;
 using System.Windows.Navigation;
-using System.Diagnostics;
-using System.Linq;
 
 namespace SimpleEncryptorDecryptor
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
     public partial class MainWindow : Window
     {
         public MainWindow()
@@ -19,11 +17,7 @@ namespace SimpleEncryptorDecryptor
             InitializeComponent();
         }
 
-        /// <summary>
-        /// Handles the RequestNavigate event for a Hyperlink, opening the specified URI in the default web browser.
-        /// </summary>
-        /// <param name="sender">The object that raised the event.</param>
-        /// <param name="e">The event arguments containing the URI to navigate to.</param>
+        // Handles the RequestNavigate event for a Hyperlink, opening the specified URI in the default web browser.
         private void Hyperlink_RequestNavigate(object sender, RequestNavigateEventArgs e)
         {
             // Create ProcessStartInfo to configure how the process should start
@@ -39,11 +33,7 @@ namespace SimpleEncryptorDecryptor
             e.Handled = true;
         }
 
-        /// <summary>
-        /// Event handler for the Decrypt button click.
-        /// </summary>
-        /// <param name="sender">The object that raised the event.</param>
-        /// <param name="e">The event arguments.</param>
+        // Event handler for the Decrypt button click.
         private void BtnDecrypt_Click(object sender, RoutedEventArgs e)
         {
             // Retrieve the key and cipher text from the input fields
@@ -61,11 +51,7 @@ namespace SimpleEncryptorDecryptor
             TxbResult.Text = Decrypt(cipherText, key);
         }
 
-        /// <summary>
-        /// Event handler for the Encrypt button click.
-        /// </summary>
-        /// <param name="sender">The object that raised the event.</param>
-        /// <param name="e">The event arguments.</param>
+        // Event handler for the Encrypt button click.
         private void BtnEncrypt_Click(object sender, RoutedEventArgs e)
         {
             // Retrieve the key and clear text from the input fields
@@ -84,113 +70,141 @@ namespace SimpleEncryptorDecryptor
         }
 
         #region *** Encryption ***
-        // Encrypts a string using the provided encryption key.
-        public static string Encrypt(string clearText, string key)
+        // Encrypts a UTF-8 string using password-based AES encryption.
+        private static string Encrypt(string clearText, string key)
         {
-            // Constants for encryption
-            const int KeySize = 128;
-            const int DerivationIterations = 1000;
+            // Size of the random salt used for PBKDF2 key derivation (128-bit)
+            const int SaltSizeBytes = 16;
 
-            // Generate random bytes for salt and initialization vector (IV)
-            var saltStringBytes = New128BitsOfRandomEntropy();
-            var ivStringBytes = New128BitsOfRandomEntropy();
+            // Size of the AES initialization vector (AES block size is 128-bit)
+            const int IvSizeBytes = 16;
 
-            // Convert the clear text to bytes
+            // Size of the derived AES key (256-bit)
+            const int KeySizeBytes = 32;
+
+            // Number of PBKDF2 iterations to slow down brute-force attacks
+            const int DerivationIterations = 100_000;
+
+            // Generate a cryptographically secure random salt
+            var salt = RandomNumberGenerator.GetBytes(SaltSizeBytes);
+
+            // Generate a cryptographically secure random initialization vector
+            var iv = RandomNumberGenerator.GetBytes(IvSizeBytes);
+
+            // Convert the plaintext string into UTF-8 encoded bytes
             var plainTextBytes = Encoding.UTF8.GetBytes(clearText);
 
-            // Derive a key from the password and salt using PBKDF2
-            using var password = new Rfc2898DeriveBytes(key, saltStringBytes, DerivationIterations, HashAlgorithmName.SHA256);
-            var keyBytes = password.GetBytes(KeySize / 8);
+            // Derive a strong encryption key from the password and salt using PBKDF2
+            var keyBytes = Rfc2898DeriveBytes.Pbkdf2(
+                password: key,
+                salt: salt,
+                iterations: DerivationIterations,
+                hashAlgorithm: HashAlgorithmName.SHA256,
+                outputLength: KeySizeBytes);
 
-            // Create an AES encryption algorithm
-            using var symmetricKey = Aes.Create();
-            symmetricKey.BlockSize = 128;
-            symmetricKey.Mode = CipherMode.CBC;
-            symmetricKey.Padding = PaddingMode.PKCS7;
+            // Create and configure the AES encryption algorithm
+            using var aes = Aes.Create();
+            aes.BlockSize = 128;
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
 
-            // Create an encryptor
-            using var encryptor = symmetricKey.CreateEncryptor(keyBytes, ivStringBytes);
+            // Create an encryptor using the derived key and generated IV
+            using var encryptor = aes.CreateEncryptor(keyBytes, iv);
 
-            // Create memory streams for encryption
+            // Encrypt the plaintext bytes into memory
             using var memoryStream = new MemoryStream();
             using var cryptoStream = new CryptoStream(memoryStream, encryptor, CryptoStreamMode.Write);
 
-            // Write the encrypted data to the memory stream
             cryptoStream.Write(plainTextBytes, 0, plainTextBytes.Length);
             cryptoStream.FlushFinalBlock();
 
-            // Combine salt, IV, and encrypted data into the final cipher text
-            var cipherTextBytes = saltStringBytes;
-            cipherTextBytes = [.. cipherTextBytes, .. ivStringBytes];
-            cipherTextBytes = [.. cipherTextBytes, .. memoryStream.ToArray()];
+            // Retrieve the encrypted bytes from the memory stream
+            var cipherTextBytes = memoryStream.ToArray();
 
-            // Close streams and return the Base64-encoded cipher text
-            memoryStream.Close();
-            cryptoStream.Close();
+            // Allocate a buffer to store salt + IV + ciphertext
+            var output = new byte[salt.Length + iv.Length + cipherTextBytes.Length];
 
-            // Convert the combined data (salt, IV, and encrypted data) to a Base64-encoded string
-            return Convert.ToBase64String(cipherTextBytes);
+            // Copy salt to the beginning of the output buffer
+            Buffer.BlockCopy(salt, 0, output, 0, salt.Length);
+
+            // Copy IV immediately after the salt
+            Buffer.BlockCopy(iv, 0, output, salt.Length, iv.Length);
+
+            // Copy ciphertext after the IV
+            Buffer.BlockCopy(
+                cipherTextBytes,
+                0,
+                output,
+                salt.Length + iv.Length,
+                cipherTextBytes.Length);
+
+            // Encode the final payload as Base64 for safe storage or transport
+            return Convert.ToBase64String(output);
         }
 
-        // Decrypts a cipher text using the specified key.
-        public static string Decrypt(string cipherText, string key)
+        // Decrypts a Base64-encoded payload produced byEncrypt.
+        private static string Decrypt(string cipherText, string key)
         {
-            // Constants for decryption
-            const int KeySize = 128;
-            const int DerivationIterations = 1000;
+            // Size of the salt that prefixes the payload (must match Encrypt)
+            const int SaltSizeBytes = 16;
 
-            // Convert the base64-encoded cipher text to bytes
-            var cipherTextBytesWithSaltAndIv = Convert.FromBase64String(cipherText);
+            // Size of the IV that follows the salt (must match Encrypt)
+            const int IvSizeBytes = 16;
 
-            // Extract the salt and IV (Initialization Vector) from the cipher text
-            var saltStringBytes = cipherTextBytesWithSaltAndIv.Take(KeySize / 8).ToArray();
-            var ivStringBytes = cipherTextBytesWithSaltAndIv.Skip(KeySize / 8).Take(KeySize / 8).ToArray();
+            // Size of the derived AES key (256-bit, must match Encrypt)
+            const int KeySizeBytes = 32;
 
-            // Extract the actual cipher text
-            var cipherTextBytes = cipherTextBytesWithSaltAndIv.Skip((KeySize / 8) * 2)
-                .Take(cipherTextBytesWithSaltAndIv.Length - ((KeySize / 8) * 2)).ToArray();
+            // PBKDF2 iteration count (must match Encrypt)
+            const int DerivationIterations = 100_000;
 
-            // Derive the encryption key from the provided key and salt
-            using var password = new Rfc2898DeriveBytes(key, saltStringBytes, DerivationIterations, HashAlgorithmName.SHA256);
-            var keyBytes = password.GetBytes(KeySize / 8);
+            // Decode the Base64 payload into raw bytes: [salt | iv | ciphertext]
+            var payloadBytes = Convert.FromBase64String(cipherText);
 
-            // Create an AES cipher with the derived key
-            using var symmetricKey = Aes.Create();
-            symmetricKey.BlockSize = 128;
-            symmetricKey.Mode = CipherMode.CBC;
-            symmetricKey.Padding = PaddingMode.PKCS7;
+            // Validate the payload is long enough to contain at least salt + iv + 1 byte of ciphertext
+            var minimumLength = SaltSizeBytes + IvSizeBytes + 1;
+            if (payloadBytes.Length < minimumLength)
+            {
+                throw new ArgumentException("Cipher text is invalid or too short.", nameof(cipherText));
+            }
 
-            // Create a decryptor with the key and IV
-            using var decryptor = symmetricKey.CreateDecryptor(keyBytes, ivStringBytes);
-            using var memoryStream = new MemoryStream(cipherTextBytes);
+            // Extract salt from the start of the payload
+            var salt = new byte[SaltSizeBytes];
+            Buffer.BlockCopy(payloadBytes, 0, salt, 0, SaltSizeBytes);
+
+            // Extract IV immediately after the salt
+            var iv = new byte[IvSizeBytes];
+            Buffer.BlockCopy(payloadBytes, SaltSizeBytes, iv, 0, IvSizeBytes);
+
+            // Extract ciphertext (everything after salt + IV)
+            var cipherOffset = SaltSizeBytes + IvSizeBytes;
+            var cipherLength = payloadBytes.Length - cipherOffset;
+            var cipherBytes = new byte[cipherLength];
+            Buffer.BlockCopy(payloadBytes, cipherOffset, cipherBytes, 0, cipherLength);
+
+            // Derive the same key bytes from the password and extracted salt
+            var keyBytes = Rfc2898DeriveBytes.Pbkdf2(
+                password: key,
+                salt: salt,
+                iterations: DerivationIterations,
+                hashAlgorithm: HashAlgorithmName.SHA256,
+                outputLength: KeySizeBytes);
+
+            // Create and configure the AES algorithm for decryption
+            using var aes = Aes.Create();
+            aes.BlockSize = 128;
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
+
+            // Create a decryptor using the derived key and extracted IV
+            using var decryptor = aes.CreateDecryptor(keyBytes, iv);
+
+            // Decrypt by streaming ciphertext through CryptoStream and reading UTF-8 text
+            using var memoryStream = new MemoryStream(cipherBytes);
             using var cryptoStream = new CryptoStream(memoryStream, decryptor, CryptoStreamMode.Read);
+            using var reader = new StreamReader(cryptoStream, Encoding.UTF8);
 
-            // Read the decrypted data into plainTextBytes
-            var plainTextBytes = new byte[cipherTextBytes.Length];
-            var decryptedByteCount = cryptoStream.Read(plainTextBytes, 0, plainTextBytes.Length);
-
-            // Close streams and return the Base64-encoded plain text
-            memoryStream.Close();
-            cryptoStream.Close();
-
-            // Convert the decrypted bytes to a UTF-8 encoded string
-            return Encoding.UTF8.GetString(plainTextBytes, 0, decryptedByteCount);
-        }
-
-        // Generates 128 bits of random entropy (16 bytes) using a pseudo-random number generator.
-        private static byte[] New128BitsOfRandomEntropy()
-        {
-            // Create an array of 16 bytes, which equals 128 bits.
-            var randomBytes = new byte[16];
-
-            // Initialize a random number generator.
-            var random = new Random();
-
-            // Generate random bytes and fill the array.
-            random.NextBytes(randomBytes);
-
-            // Return the generated random entropy (128 bits).
-            return randomBytes;
+            // Read and return the decrypted plaintext
+            return reader.ReadToEnd();
         }
         #endregion
     }

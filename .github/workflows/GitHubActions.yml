@@ -1,5 +1,5 @@
 # Workflow to build and release OcrInspector for production
-name: Simple Encryptor Decryptor Production
+name: Simple Encryptor Decryptor
 
 # Permissions for the workflow
 permissions:

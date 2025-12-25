@@ -41,10 +41,6 @@ Click the "Decrypt" button to decrypt the encrypted text.
 
 The result of the encryption or decryption process will be displayed in the application.
 
-## Credits
-
-- Encryption icons created by [juicy_fish](https://www.flaticon.com/free-icons/encryption) - Flaticon.
-
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
