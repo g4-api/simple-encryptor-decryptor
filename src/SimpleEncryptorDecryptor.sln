@@ -1,13 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
-VisualStudioVersion = 18.1.11312.151 d18.0
+VisualStudioVersion = 18.1.11312.151
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SimpleEncryptorDecryptor", "SimpleEncryptorDecryptor\SimpleEncryptorDecryptor.csproj", "{BEA73234-9FEB-4353-9AAC-D29DB3955DD5}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".build", ".build", "{EF21B22D-DBCB-4201-8A97-66AB690B4DE4}"
 	ProjectSection(SolutionItems) = preProject
-		..\.github\workflows\GitHubActions.yml = ..\.github\workflows\GitHubActions.yml
+		..\.github\workflows\release-pipeline.yml = ..\.github\workflows\release-pipeline.yml
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{510A60E2-E717-42F0-93F1-7304680873C5}"
